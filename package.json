@@ -1,0 +1,38 @@
+{
+  "name": "tkss-valencia",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "dev:full": "node scripts/start-local.mjs",
+    "db:stop": "supabase stop",
+    "db:seed-local": "node scripts/seed-local.mjs",
+    "build": "tsc -b && vite build",
+    "lint": "oxlint",
+    "test": "vitest run",
+    "test:local": "node scripts/test-local.mjs",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.109.0",
+    "lucide-react": "^1.72.0",
+    "luxon": "^3.7.2",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "react-router": "^7.18.5"
+  },
+  "devDependencies": {
+    "@types/luxon": "^3.7.6",
+    "@types/node": "^24.19.2",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "oxlint": "^1.90.0",
+    "supabase": "^3.1.0",
+    "typescript": "~7.0.2",
+    "vite": "^8.3.6",
+    "vitest": "^4.1.12",
+    "ws": "^8.22.2"
+  }
+}

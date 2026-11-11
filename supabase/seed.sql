@@ -1,0 +1,2 @@
+-- Test users and sample events are created by scripts/bootstrap-local.mjs.
+-- This file is intentionally empty so a database reset starts from a clean state.
