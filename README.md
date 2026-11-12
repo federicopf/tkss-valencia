@@ -68,7 +68,7 @@ Prima di attivare la connessione configura le variabili di build `VITE_SUPABASE_
 
 Per fare in modo che la produzione riceva solo codice verificato, imposta in GitHub una ruleset per `main` che richieda una pull request e il job `frontend` della workflow `Checks` prima del merge. Senza questa protezione, un push diretto a `main` avvia comunque un deploy Cloudflare.
 
-Le migrazioni Supabase restano separate e manuali: crea prima il progetto di produzione, configura i secrets `SUPABASE_ACCESS_TOKEN`, `SUPABASE_PROJECT_REF` e `SUPABASE_DB_PASSWORD` nell'ambiente GitHub `production`, poi avvia **Actions → Apply Supabase migrations** dal branch `main`. Questa workflow applica solo le migrazioni versionate e non importa dati demo.
+Le migrazioni Supabase vengono applicate automaticamente dopo il successo della workflow `Checks` sui push a `main`. Per attivare il collegamento, configura i secrets `SUPABASE_ACCESS_TOKEN`, `SUPABASE_PROJECT_REF` e `SUPABASE_DB_PASSWORD` nell'ambiente GitHub `production`. La workflow **Apply Supabase migrations** resta avviabile manualmente dal branch `main` per inizializzazione o recupero. Applica solo le migrazioni versionate e non importa dati demo.
 
 ## Collegamento di Supabase
 
@@ -90,4 +90,4 @@ I log di login appartengono a Supabase Auth. La loro conservazione va verificata
 
 ## Pubblicazione prevista
 
-Il deploy frontend su Cloudflare Pages parte automaticamente dai push al branch `main`, protetto dai controlli CI. Le migrazioni al database di produzione si applicano separatamente tramite workflow manuale. Hosting e database di produzione restano distinti dallo stack locale.
+Il deploy frontend su Cloudflare Pages parte automaticamente dai push al branch `main`, protetto dai controlli CI. Dopo il successo dei controlli, GitHub Actions applica le migrazioni al database di produzione; anche il deploy Pages è automatico. Hosting e database di produzione restano distinti dallo stack locale.
