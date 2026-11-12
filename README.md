@@ -54,16 +54,21 @@ In produzione pubblica prima i nuovi file con un push su GitHub e attendi il dep
 
 ## Pubblicazione su Cloudflare Pages
 
-Il deploy è manuale e passa da GitHub Actions: prima esegue lint, test e build; solo se tutto riesce pubblica `dist` sul progetto Pages `tkss-valencia` dal branch `main`.
+Il deploy del frontend è automatico tramite Git integration di Cloudflare Pages. Un push su `main` pubblica la produzione; i branch e le pull request generano anteprime. La workflow GitHub `Checks` esegue lint, test e build su ogni push e pull request.
 
-1. Crea un progetto Cloudflare Pages chiamato `tkss-valencia` e collega il repository GitHub, oppure usa il deploy manuale della workflow qui sotto.
-2. In GitHub crea l'ambiente `production` e aggiungi i secrets `CLOUDFLARE_API_TOKEN` (permesso Pages: Edit) e `CLOUDFLARE_ACCOUNT_ID`.
-3. Aggiungi nell'ambiente `production` le variabili `VITE_SUPABASE_URL` e `VITE_SUPABASE_PUBLISHABLE_KEY`.
-4. Dopo aver pubblicato il branch `main`, vai in **Actions → Deploy Cloudflare Pages → Run workflow**.
+In Cloudflare vai su **Workers & Pages → Create application → Pages → Connect to Git**, autorizza GitHub e seleziona `federicopf/tkss-valencia`. Usa queste impostazioni:
 
-Per applicare le migrazioni al database di produzione, configura nello stesso ambiente anche `SUPABASE_ACCESS_TOKEN`, `SUPABASE_PROJECT_REF` e `SUPABASE_DB_PASSWORD`, poi avvia **Actions → Apply Supabase migrations** dal branch `main`. Questa workflow applica solo le nuove migrazioni versionate; non importa dati demo.
+- Production branch: `main`
+- Framework preset: `Vite`
+- Build command: `npm run build`
+- Build output directory: `dist`
+- Root directory: lascia vuoto (radice del repository)
 
-La workflow non effettua deploy automatici a ogni push. La workflow `Checks` continua invece a controllare ogni push e pull request.
+Prima di attivare la connessione configura le variabili di build `VITE_SUPABASE_URL` e `VITE_SUPABASE_PUBLISHABLE_KEY` per Production. Dopo aver creato Supabase, inserisci i valori di produzione in **Settings → Environment variables** del progetto Pages. Non usare la secret/service-role key nel frontend.
+
+Per fare in modo che la produzione riceva solo codice verificato, imposta in GitHub una ruleset per `main` che richieda una pull request e il job `frontend` della workflow `Checks` prima del merge. Senza questa protezione, un push diretto a `main` avvia comunque un deploy Cloudflare.
+
+Le migrazioni Supabase restano separate e manuali: crea prima il progetto di produzione, configura i secrets `SUPABASE_ACCESS_TOKEN`, `SUPABASE_PROJECT_REF` e `SUPABASE_DB_PASSWORD` nell'ambiente GitHub `production`, poi avvia **Actions → Apply Supabase migrations** dal branch `main`. Questa workflow applica solo le migrazioni versionate e non importa dati demo.
 
 ## Collegamento di Supabase
 
@@ -85,4 +90,4 @@ I log di login appartengono a Supabase Auth. La loro conservazione va verificata
 
 ## Pubblicazione prevista
 
-Il deploy Pages è manuale dalla workflow GitHub Actions, dopo i controlli automatici. La configurazione dell'hosting richiede un progetto Cloudflare Pages e un progetto Supabase di produzione distinti dallo stack locale.
+Il deploy frontend su Cloudflare Pages parte automaticamente dai push al branch `main`, protetto dai controlli CI. Le migrazioni al database di produzione si applicano separatamente tramite workflow manuale. Hosting e database di produzione restano distinti dallo stack locale.
