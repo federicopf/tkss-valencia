@@ -11,7 +11,7 @@ La prima versione locale funziona con Supabase CLI: PostgreSQL, Auth e API vengo
 - `/`: home con calendario e presentazione del gruppo.
 - `/calendario`: calendario dedicato.
 - `/eventos/:id`: dettaglio dell'evento con eventuale galleria.
-- `/grupo`: informazioni sul gruppo e mappa di Valencia.
+- `/grupo`: informazioni sul gruppo.
 
 ## Sviluppo locale
 

@@ -41,7 +41,7 @@ function ScrollToTop() {
   return null
 }
 
-function SiteHeader({ user, onLogin }: { user: User | null; onLogin: () => void }) {
+function SiteHeader({ user, onLogin, onSignOut }: { user: User | null; onLogin: () => void; onSignOut: () => void }) {
   const [menuOpen, setMenuOpen] = useState(false)
   const closeMenu = () => setMenuOpen(false)
   return <header className="site-header">
@@ -52,7 +52,7 @@ function SiteHeader({ user, onLogin }: { user: User | null; onLogin: () => void 
       <NavLink to="/" end onClick={closeMenu}>Inicio</NavLink>
       <NavLink to="/calendario" onClick={closeMenu}>Calendario</NavLink>
       <NavLink to="/grupo" onClick={closeMenu}>El grupo</NavLink>
-      {user ? <><NavLink to="/admin" onClick={closeMenu}>Dashboard</NavLink><button className="nav-action" type="button" onClick={() => { void supabase?.auth.signOut(); closeMenu() }}><LogOut size={16} /> Salir</button></>
+      {user ? <><NavLink to="/admin" onClick={closeMenu}>Dashboard</NavLink><button className="nav-action" type="button" onClick={() => { onSignOut(); closeMenu() }}><LogOut size={16} /> Salir</button></>
         : <button className="nav-action" type="button" onClick={() => { onLogin(); closeMenu() }}><LogIn size={16} /> Admin</button>}
     </nav>
     <button className="mobile-menu" type="button" aria-label={menuOpen ? 'Cerrar menú' : 'Abrir menú'} aria-expanded={menuOpen} onClick={() => setMenuOpen(!menuOpen)}><Menu size={24} /></button>
@@ -212,7 +212,6 @@ function EventDetailPage({ user, refreshKey, onEdit }: Pick<CalendarProps, 'user
 function GroupPage() {
   return <main><div className="page-banner"><span className="eyebrow">TINKUS SAN SIMÓN · VALENCIA</span><h1>El grupo</h1><p>Danza, tradición y comunidad. Un lugar para encontrarnos y compartir el Tinkus en Valencia.</p></div>
     <section className="group-content"><div><span className="section-kicker">QUIÉNES SOMOS</span><h2>La fuerza de estar juntos.</h2><p>Este espacio reúne las actividades de Tinkus San Simón Valencia. En el calendario encontrarás las fechas, los horarios y el lugar de cada encuentro.</p><Link className="secondary-button" to="/calendario">Ver calendario <ArrowRight size={17} /></Link></div><img src="/tinkus-san-simon-valencia.png" alt="Logo de Tinkus San Simón Valencia" loading="lazy" /></section>
-    <section className="map-section"><div><span className="section-kicker">NUESTRO LUGAR</span><h2>Nos vemos en Valencia.</h2><p>El mapa muestra la ciudad. Consulta cada evento para conocer el lugar concreto.</p><a className="text-link" href="https://www.openstreetmap.org/#map=12/39.470/-0.376" target="_blank" rel="noreferrer">Abrir mapa <ArrowRight size={17} /></a></div><iframe title="Mapa de Valencia en OpenStreetMap" src="https://www.openstreetmap.org/export/embed.html?bbox=-0.44%2C39.42%2C-0.31%2C39.52&layer=mapnik" loading="lazy" referrerPolicy="strict-origin-when-cross-origin" /></section>
   </main>
 }
 
@@ -227,15 +226,31 @@ function App() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [formError, setFormError] = useState('')
+  const [authError, setAuthError] = useState('')
   const [saving, setSaving] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
 
   useEffect(() => {
     if (!supabase) return
-    void supabase.auth.getUser().then(({ data }) => setUser(data.user))
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => setUser(session?.user ?? null))
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null)
+      if (!session) setAuthError('')
+    })
     return () => listener.subscription.unsubscribe()
   }, [])
+
+  async function signOut() {
+    if (!supabase) return
+    const { error } = await supabase.auth.signOut()
+    if (error) {
+      setAuthError('No se pudo cerrar la sesión. Inténtalo de nuevo.')
+      return
+    }
+    setUser(null)
+    setAuthError('')
+    setModal(null)
+    navigate('/')
+  }
 
   function openEvent(day?: DateTime, event?: CalendarEvent) {
     setEditingEvent(event ?? null)
@@ -290,7 +305,8 @@ function App() {
   }
 
   const calendarProps: CalendarProps = { user, refreshKey, onNew: (day) => openEvent(day), onEdit: (event) => openEvent(undefined, event) }
-  return <div className="site-shell"><ScrollToTop /><SiteHeader user={user} onLogin={() => { setFormError(''); setModal('login') }} />
+  return <div className="site-shell"><ScrollToTop /><SiteHeader user={user} onLogin={() => { setFormError(''); setModal('login') }} onSignOut={() => { void signOut() }} />
+    {authError && <p className="auth-error" role="alert">{authError}</p>}
     <Routes><Route path="/" element={<HomePage {...calendarProps} />} /><Route path="/calendario" element={<CalendarPage {...calendarProps} />} /><Route path="/admin" element={<AdminDashboard {...calendarProps} />} /><Route path="/eventos/:id" element={<EventDetailPage user={user} refreshKey={refreshKey} onEdit={calendarProps.onEdit} />} /><Route path="/grupo" element={<GroupPage />} /><Route path="*" element={<NotFoundPage />} /></Routes><SiteFooter />
     {modal && <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setModal(null) }}><div className="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"><div className="modal-header"><div><span className="section-kicker">ÁREA ADMIN</span><h2 id="modal-title">{modal === 'login' ? 'Entrar' : editingEvent ? 'Editar evento' : 'Nuevo evento'}</h2></div><button type="button" aria-label="Cerrar" onClick={() => setModal(null)}><X size={22} /></button></div>
       {modal === 'login' ? <form onSubmit={(event) => void signIn(event)} className="form-stack"><label>Correo electrónico<input type="email" required autoComplete="username" value={email} onChange={(event) => setEmail(event.target.value)} /></label><label>Contraseña<input type="password" required autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} /></label>{formError && <p className="form-error" role="alert">{formError}</p>}<button type="submit" className="primary-button" disabled={saving}>{saving ? 'Entrando…' : 'Entrar'}</button></form>

@@ -46,8 +46,9 @@ Il progetto deve restare semplice da usare e poco costoso da gestire. Il traffic
 
 ### Altre pagine
 
-- `/grupo` presenta il gruppo e incorpora una mappa di Valencia tramite OpenStreetMap.
-- La mappa indica la città, non un luogo di incontro specifico. Il luogo concreto resta nel singolo evento.
+- `/grupo` presenta il gruppo senza incorporare mappe per ora.
+- La posizione registrata su Google verrà pubblicata quando il gruppo sarà pronto a rendere visibile il luogo.
+- Il luogo concreto resta disponibile nei singoli eventi del calendario.
 
 ### Audit log
 
