@@ -2,6 +2,18 @@ import { DateTime } from 'luxon'
 
 export const EVENT_ZONE = 'Europe/Madrid'
 
+export const eventCategories = ['ensayos', 'novenas', 'pasacalles', 'viajes', 'presentaciones', 'cumpleanos'] as const
+export type EventCategory = typeof eventCategories[number]
+
+export const eventCategoryLabels: Record<EventCategory, string> = {
+  ensayos: 'Ensayos',
+  novenas: 'Novenas',
+  pasacalles: 'Pasacalles',
+  viajes: 'Viajes',
+  presentaciones: 'Presentaciones',
+  cumpleanos: 'Cumpleaños',
+}
+
 export type CalendarEvent = {
   id: string
   title: string
@@ -10,8 +22,11 @@ export type CalendarEvent = {
   starts_at: string
   ends_at: string
   created_at: string
-  created_by: string
+  created_by: string | null
   images: string[]
+  category: EventCategory
+  repeat_weekly: boolean
+  series_id?: string
 }
 
 export type EventDraft = Pick<CalendarEvent, 'title' | 'description' | 'location' | 'images'> & {
@@ -43,6 +58,27 @@ export function eventDays(event: CalendarEvent): string[] {
     days.push(dayKey(cursor))
   }
   return days
+}
+
+export function expandWeeklyEvents(series: CalendarEvent[], rangeStart: DateTime, rangeEnd: DateTime): CalendarEvent[] {
+  const occurrences: CalendarEvent[] = []
+  for (const event of series) {
+    const firstStart = madridDate(event.starts_at)
+    const firstEnd = madridDate(event.ends_at)
+    const dayOffset = Math.round(firstEnd.startOf('day').diff(firstStart.startOf('day'), 'days').days)
+    const firstDay = firstStart.startOf('day')
+    let day = DateTime.max(firstDay, rangeStart.setZone(EVENT_ZONE).startOf('day'))
+    while (day.weekday !== firstStart.weekday) day = day.plus({ days: 1 })
+    const lastDay = rangeEnd.setZone(EVENT_ZONE).startOf('day')
+    while (day <= lastDay) {
+      const start = day.set({ hour: firstStart.hour, minute: firstStart.minute, second: firstStart.second, millisecond: 0 })
+      const endDay = day.plus({ days: dayOffset })
+      const end = endDay.set({ hour: firstEnd.hour, minute: firstEnd.minute, second: firstEnd.second, millisecond: 0 })
+      occurrences.push({ ...event, id: `${event.id}@${day.toFormat('yyyy-MM-dd')}`, series_id: event.id, starts_at: start.toUTC().toISO()!, ends_at: end.toUTC().toISO()! })
+      day = day.plus({ weeks: 1 })
+    }
+  }
+  return occurrences
 }
 
 export function toUtcIso(localValue: string): string | null {

@@ -44,6 +44,18 @@
 .section-heading h2, .about-section h2 { font: 800 clamp(34px, 3.8vw, 56px)/1.12 Manrope, sans-serif; letter-spacing: -.065em; margin: 12px 0 0; }
 .section-heading h2 em { text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 7px; }
 .heading-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.category-legend { display: flex; flex-wrap: wrap; gap: 9px 17px; margin: -10px 0 24px; }
+.category-legend > span { display: inline-flex; align-items: center; gap: 7px; color: #555; font-size: 11px; font-weight: 700; }
+.category-dot { display: block; width: 9px; height: 9px; border-radius: 50%; }
+.category-label { display: inline-flex; align-items: center; width: fit-content; border-radius: 999px; padding: 4px 9px; font-size: 10px; line-height: 1.4; font-weight: 800; }
+.category-ensayos { --category: #00a9d5; --category-soft: #e3f8fd; --category-ink: #006b86; }
+.category-novenas { --category: #e5b300; --category-soft: #fff6d5; --category-ink: #755a00; }
+.category-pasacalles { --category: #e52b2b; --category-soft: #ffebeb; --category-ink: #9b1e1e; }
+.category-viajes { --category: #078f4b; --category-soft: #e4f5eb; --category-ink: #075a32; }
+.category-presentaciones { --category: #087fa8; --category-soft: #e4f4f9; --category-ink: #07526b; }
+.category-cumpleanos { --category: #ef9b19; --category-soft: #fff1d9; --category-ink: #81500a; }
+.category-dot, .event-accent, .mobile-dot { background: var(--category, #111); }
+.category-label { background: var(--category-soft, #eee); color: var(--category-ink, #333); }
 .primary-button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 46px; border: 1px solid #111; background: #111; color: #fff; padding: 13px 19px; font-size: 13px; font-weight: 800; }
 .primary-button:hover { background: #fff; color: #111; }
 .primary-button:disabled { opacity: .6; cursor: wait; }
@@ -73,6 +85,7 @@
 .day-cell.today .day-number { background: #111; color: #fff; }
 .day-events { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .event-chip { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; background: #222; color: #fff; padding: 4px 5px; font-size: 10px; font-weight: 700; }
+.event-chip.category-ensayos, .event-chip.category-novenas, .event-chip.category-pasacalles, .event-chip.category-viajes, .event-chip.category-presentaciones, .event-chip.category-cumpleanos { background: var(--category-soft); color: var(--category-ink); }
 .more-events { color: #555; font-size: 10px; font-weight: 700; }
 .mobile-dot { display: none; }
 
@@ -115,7 +128,10 @@
 .form-stack { display: flex; flex-direction: column; gap: 15px; }
 .form-stack label { display: flex; flex-direction: column; gap: 7px; color: #333; font-size: 12px; font-weight: 800; }
 .form-stack input, .form-stack textarea { width: 100%; border: 1px solid #aaa; border-radius: 0; background: #fff; color: #111; padding: 11px 12px; outline: none; }
-.form-stack input:focus, .form-stack textarea:focus { border-color: #111; box-shadow: 0 0 0 2px #111; }
+.form-stack select { width: 100%; border: 1px solid #aaa; border-radius: 0; background: #fff; color: #111; padding: 11px 12px; outline: none; }
+.form-stack input:focus, .form-stack textarea:focus, .form-stack select:focus { border-color: #111; box-shadow: 0 0 0 2px #111; }
+.form-stack label.repeat-option { flex-direction: row; align-items: center; gap: 10px; }
+.repeat-option input { width: 18px; height: 18px; margin: 0; accent-color: #111; }
 .form-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .timezone-note { color: #666; font-size: 11px; margin: -8px 0 0; }
 .form-error { color: #111; background: #eee; border-left: 3px solid #111; padding: 10px; font-size: 12px; margin: 0; }
@@ -198,6 +214,7 @@
   .section-heading { align-items: start; flex-direction: column; }
   .heading-actions { width: 100%; }
   .section-heading h2 { font-size: 38px; }
+  .category-legend { gap: 8px 12px; margin-top: -8px; }
   .calendar-toolbar { height: 65px; padding: 0 12px; }
   .month-title { gap: 6px; }
   .month-title h3 { font-size: 16px; }

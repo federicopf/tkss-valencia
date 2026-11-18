@@ -4,7 +4,7 @@ import type { User } from '@supabase/supabase-js'
 import { DateTime } from 'luxon'
 import { ArrowLeft, ArrowRight, CalendarDays, Clock3, LogIn, LogOut, MapPin, Menu, Plus, X } from 'lucide-react'
 import { Link, NavLink, Route, Routes, useLocation, useNavigate, useParams } from 'react-router'
-import { dayKey, EVENT_ZONE, eventDays, madridDate, monthDays, toLocalInput, toUtcIso } from './lib/calendar'
+import { dayKey, EVENT_ZONE, eventCategoryLabels, eventCategories, eventDays, expandWeeklyEvents, madridDate, monthDays, toLocalInput, toUtcIso } from './lib/calendar'
 import type { CalendarEvent } from './lib/calendar'
 import { supabase } from './lib/supabase'
 import './App.css'
@@ -20,6 +20,8 @@ type EventForm = {
   startsAt: string
   endsAt: string
   imagesText: string
+  category: CalendarEvent['category']
+  repeatWeekly: boolean
 }
 
 function initialForm(day?: DateTime, event?: CalendarEvent): EventForm {
@@ -30,9 +32,11 @@ function initialForm(day?: DateTime, event?: CalendarEvent): EventForm {
     startsAt: toLocalInput(event.starts_at),
     endsAt: toLocalInput(event.ends_at),
     imagesText: event.images.join('\n'),
+    category: event.category,
+    repeatWeekly: event.repeat_weekly,
   }
   const date = (day ?? today).toFormat('yyyy-MM-dd')
-  return { title: '', description: '', location: '', startsAt: `${date}T18:00`, endsAt: `${date}T20:00`, imagesText: '' }
+  return { title: '', description: '', location: '', startsAt: `${date}T18:00`, endsAt: `${date}T20:00`, imagesText: '', category: 'ensayos', repeatWeekly: false }
 }
 
 function ScrollToTop() {
@@ -102,14 +106,21 @@ function CalendarSection({ user, refreshKey, onNew, onEdit, home = false }: Cale
     if (!supabase) { setEvents([]); setLoading(false); return }
     setLoading(true)
     setLoadError('')
-    const start = month.startOf('week').toUTC().toISO()
-    const end = month.endOf('month').endOf('week').plus({ days: 1 }).startOf('day').toUTC().toISO()
-    const { data, error } = await supabase.from('events')
-      .select('id,title,description,location,starts_at,ends_at,created_at,created_by,images')
-      .lt('starts_at', end).gte('ends_at', start).order('starts_at', { ascending: true })
+    const rangeStart = month.startOf('week')
+    const rangeEnd = month.endOf('month').endOf('week')
+    const start = rangeStart.toUTC().toISO()
+    const end = rangeEnd.plus({ days: 1 }).startOf('day').toUTC().toISO()
+    const columns = 'id,title,description,location,starts_at,ends_at,created_at,created_by,images,category,repeat_weekly'
+    const [singleResult, seriesResult] = await Promise.all([
+      supabase.from('events').select(columns).eq('repeat_weekly', false).lt('starts_at', end).gte('ends_at', start).order('starts_at', { ascending: true }),
+      supabase.from('events').select(columns).eq('repeat_weekly', true).lt('starts_at', end),
+    ])
     if (request !== latestRequest.current) return
-    if (error) setLoadError('No se pudieron cargar los eventos. Inténtalo de nuevo.')
-    else setEvents((data ?? []) as CalendarEvent[])
+    if (singleResult.error || seriesResult.error) setLoadError('No se pudieron cargar los eventos. Inténtalo de nuevo.')
+    else {
+      const recurring = expandWeeklyEvents((seriesResult.data ?? []) as CalendarEvent[], rangeStart, rangeEnd)
+      setEvents([...(singleResult.data ?? []) as CalendarEvent[], ...recurring].sort((a, b) => a.starts_at.localeCompare(b.starts_at)))
+    }
     setLoading(false)
   }, [month])
 
@@ -142,14 +153,15 @@ function CalendarSection({ user, refreshKey, onNew, onEdit, home = false }: Cale
     <div className="section-heading"><div><span className="section-kicker">NUESTRA AGENDA</span><h2 id="calendar-title">Próximos <em>encuentros</em></h2></div>
       <div className="heading-actions">{home && <Link className="secondary-button" to="/calendario">Página del calendario <ArrowRight size={17} /></Link>}{user && <button className="primary-button" type="button" onClick={() => onNew(selectedDate)}><Plus size={18} /> Nuevo evento</button>}</div>
     </div>
+    <div className="category-legend" aria-label="Categorías de eventos">{eventCategories.map((category) => <span key={category}><i className={`category-dot category-${category}`} />{eventCategoryLabels[category]}</span>)}</div>
     <div className="calendar-layout"><div className="calendar-card">
       <div className="calendar-toolbar"><div className="month-title"><CalendarDays size={20} /><h3>{month.setLocale('es').toFormat('LLLL yyyy')}</h3></div><div className="month-actions"><button type="button" onClick={() => { setMonth(today.startOf('month')); setSelectedDay(dayKey(today)) }}>Hoy</button><button type="button" aria-label="Mes anterior" onClick={() => changeMonth(-1)}><ArrowLeft size={18} /></button><button type="button" aria-label="Mes siguiente" onClick={() => changeMonth(1)}><ArrowRight size={18} /></button></div></div>
       <div className="calendar-grid" role="grid" aria-label={`Calendario de ${month.setLocale('es').toFormat('LLLL yyyy')}`}>
         {weekdays.map((day) => <div className="weekday" key={day} role="columnheader">{day}</div>)}
-        {days.map((day) => { const key = dayKey(day); const dayEvents = byDay.get(key) ?? []; return <button key={key} className={`day-cell${day.month !== month.month ? ' outside' : ''}${key === selectedDay ? ' selected' : ''}${key === dayKey(today) ? ' today' : ''}`} type="button" role="gridcell" aria-selected={key === selectedDay} aria-label={`${day.setLocale('es').toFormat('d LLLL yyyy')}, ${dayEvents.length} eventos`} onClick={() => { setSelectedDay(key); if (day.month !== month.month) setMonth(day.startOf('month')) }}><span className="day-number">{day.day}</span><span className="day-events">{dayEvents.slice(0, 2).map((item) => <span className="event-chip" key={item.id}>{item.title}</span>)}{dayEvents.length > 2 && <span className="more-events">+{dayEvents.length - 2} más</span>}</span>{dayEvents.length > 0 && <span className="mobile-dot" />}</button> })}
+        {days.map((day) => { const key = dayKey(day); const dayEvents = byDay.get(key) ?? []; return <button key={key} className={`day-cell${day.month !== month.month ? ' outside' : ''}${key === selectedDay ? ' selected' : ''}${key === dayKey(today) ? ' today' : ''}`} type="button" role="gridcell" aria-selected={key === selectedDay} aria-label={`${day.setLocale('es').toFormat('d LLLL yyyy')}, ${dayEvents.length} eventos`} onClick={() => { setSelectedDay(key); if (day.month !== month.month) setMonth(day.startOf('month')) }}><span className="day-number">{day.day}</span><span className="day-events">{dayEvents.slice(0, 2).map((item) => <span className={`event-chip category-${item.category}`} key={item.id}>{item.title}</span>)}{dayEvents.length > 2 && <span className="more-events">+{dayEvents.length - 2} más</span>}</span>{dayEvents.length > 0 && <span className={`mobile-dot category-${dayEvents[0].category}`} />}</button> })}
       </div>
     </div><aside className="day-panel" aria-live="polite"><div className="panel-heading"><span>EN ESTA FECHA</span><h3>{selectedDate.setLocale('es').toFormat('d LLLL')}</h3><p>{selectedDate.setLocale('es').toFormat('cccc')}</p></div>
-      {loading ? <p className="panel-empty">Cargando eventos…</p> : loadError ? <div className="panel-empty"><p>{loadError}</p><button type="button" onClick={() => void loadEvents()}>Reintentar</button></div> : selectedEvents.length ? <div className="event-list">{selectedEvents.map((event) => <article className="event-item" key={event.id}><span className="event-accent" /><div className="event-content"><span className="event-time"><Clock3 size={14} /> {madridDate(event.starts_at).toFormat('HH:mm')} – {madridDate(event.ends_at).toFormat('HH:mm')}</span><h4><Link to={`/eventos/${event.id}`}>{event.title}</Link></h4>{event.location && <p className="event-location"><MapPin size={14} /> {event.location}</p>}{event.description && <p className="event-description">{event.description}</p>}<Link className="edit-link" to={`/eventos/${event.id}`}>Ver detalles <ArrowRight size={14} /></Link>{user && <button type="button" className="edit-link edit-control" onClick={() => onEdit(event)}>Editar</button>}</div></article>)}</div> : <div className="panel-empty"><div className="empty-icon"><CalendarDays size={25} /></div><h4>Un día por descubrir</h4><p>Todavía no hay encuentros programados para esta fecha.</p>{user && <button type="button" onClick={() => onNew(selectedDate)}>Añadir un evento →</button>}</div>}
+      {loading ? <p className="panel-empty">Cargando eventos…</p> : loadError ? <div className="panel-empty"><p>{loadError}</p><button type="button" onClick={() => void loadEvents()}>Reintentar</button></div> : selectedEvents.length ? <div className="event-list">{selectedEvents.map((event) => <article className="event-item" key={event.id}><span className={`event-accent category-${event.category}`} /><div className="event-content"><span className="event-time"><Clock3 size={14} /> {madridDate(event.starts_at).toFormat('HH:mm')} – {madridDate(event.ends_at).toFormat('HH:mm')}</span><h4><Link to={`/eventos/${event.id}`}>{event.title}</Link></h4><span className={`category-label category-${event.category}`}>{eventCategoryLabels[event.category]}</span>{event.location && <p className="event-location"><MapPin size={14} /> {event.location}</p>}{event.description && <p className="event-description">{event.description}</p>}<Link className="edit-link" to={`/eventos/${event.id}`}>Ver detalles <ArrowRight size={14} /></Link>{user && <button type="button" className="edit-link edit-control" onClick={() => onEdit(event)}>Editar</button>}</div></article>)}</div> : <div className="panel-empty"><div className="empty-icon"><CalendarDays size={25} /></div><h4>Un día por descubrir</h4><p>Todavía no hay encuentros programados para esta fecha.</p>{user && <button type="button" onClick={() => onNew(selectedDate)}>Añadir un evento →</button>}</div>}
       <div className="panel-footer">¿Tienes una idea para encontrarnos? <span>¡Nos vemos en la pista!</span></div>
     </aside></div>
   </section>
@@ -166,13 +178,13 @@ function AdminDashboard({ user, refreshKey, onNew, onEdit }: CalendarProps) {
     let active = true
     void (async () => {
       if (!supabase || !user) { setLoading(false); return }
-      const { data } = await supabase.from('events').select('id,title,description,location,starts_at,ends_at,created_at,created_by,images').order('starts_at', { ascending: true })
+      const { data } = await supabase.from('events').select('id,title,description,location,starts_at,ends_at,created_at,created_by,images,category,repeat_weekly').order('starts_at', { ascending: true })
       if (active) { setEvents((data ?? []) as CalendarEvent[]); setLoading(false) }
     })()
     return () => { active = false }
   }, [user, refreshKey])
   if (!user) return <main className="admin-page"><h1>Área de administración</h1><p>Inicia sesión con una cuenta admin para gestionar el calendario.</p></main>
-  return <main className="admin-page"><div className="admin-title"><div><span className="section-kicker">GESTIÓN DEL SITIO</span><h1>Dashboard</h1><p>Administra únicamente los eventos del calendario.</p></div><button className="primary-button" onClick={() => onNew(today)}><Plus size={18} /> Crear evento</button></div><section className="admin-panel"><div className="admin-panel-head"><h2>Eventos</h2><span>{events.length} en total</span></div>{loading ? <p>Cargando…</p> : events.length ? <div className="admin-event-list">{events.map((event) => <article key={event.id}><div><strong>{event.title}</strong><span>{madridDate(event.starts_at).setLocale('es').toFormat('d LLL yyyy · HH:mm')} · {event.images.length} imágenes</span></div><div className="admin-event-actions"><Link to={`/eventos/${event.id}`}>Ver</Link><button onClick={() => onEdit(event)}>Editar</button></div></article>)}</div> : <p>Aún no hay eventos. Crea el primero para publicarlo en el calendario.</p>}</section></main>
+  return <main className="admin-page"><div className="admin-title"><div><span className="section-kicker">GESTIÓN DEL SITIO</span><h1>Dashboard</h1><p>Administra únicamente los eventos del calendario.</p></div><button className="primary-button" onClick={() => onNew(today)}><Plus size={18} /> Crear evento</button></div><section className="admin-panel"><div className="admin-panel-head"><h2>Eventos</h2><span>{events.length} en total</span></div>{loading ? <p>Cargando…</p> : events.length ? <div className="admin-event-list">{events.map((event) => <article key={event.id}><div><strong>{event.title}</strong><span>{madridDate(event.starts_at).setLocale('es').toFormat('d LLL yyyy · HH:mm')} · {event.images.length} imágenes · {event.repeat_weekly ? `Cada semana · ${eventCategoryLabels[event.category]}` : eventCategoryLabels[event.category]}</span></div><div className="admin-event-actions">{!event.repeat_weekly && <Link to={`/eventos/${event.id}`}>Ver</Link>}<button onClick={() => onEdit(event)}>{event.repeat_weekly ? 'Editar serie' : 'Editar'}</button></div></article>)}</div> : <p>Aún no hay eventos. Crea el primero para publicarlo en el calendario.</p>}</section></main>
 }
 
 function EventDetailPage({ user, refreshKey, onEdit }: Pick<CalendarProps, 'user' | 'refreshKey' | 'onEdit'>) {
@@ -185,9 +197,16 @@ function EventDetailPage({ user, refreshKey, onEdit }: Pick<CalendarProps, 'user
     let active = true
     void (async () => {
       if (!supabase || !id) { if (active) { setEvent(null); setLoading(false) }; return }
-      const result = await supabase.from('events').select('id,title,description,location,starts_at,ends_at,created_at,created_by,images').eq('id', id).maybeSingle()
+      const recurringMatch = id.match(/^([0-9a-f-]{36})@(\d{4}-\d{2}-\d{2})$/i)
+      const sourceId = recurringMatch?.[1] ?? id
+      const result = await supabase.from('events').select('id,title,description,location,starts_at,ends_at,created_at,created_by,images,category,repeat_weekly').eq('id', sourceId).maybeSingle()
       if (!active) return
-      setEvent(result.data as CalendarEvent | null)
+      let loadedEvent = result.data as CalendarEvent | null
+      if (loadedEvent && recurringMatch) {
+        const date = DateTime.fromISO(recurringMatch[2], { zone: EVENT_ZONE })
+        loadedEvent = expandWeeklyEvents([loadedEvent], date, date)[0] ?? null
+      }
+      setEvent(loadedEvent)
       setError(result.error ? 'No se pudo cargar el evento.' : '')
       setLoading(false)
     })()
@@ -201,7 +220,7 @@ function EventDetailPage({ user, refreshKey, onEdit }: Pick<CalendarProps, 'user
   const end = madridDate(event.ends_at).setLocale('es')
   return <main className="detail-page">
     <Link className="back-link" to="/calendario"><ArrowLeft size={16} /> Volver al calendario</Link>
-    <div className="detail-heading"><div><span className="section-kicker">ENCUENTRO · TINKUS SAN SIMÓN</span><h1>{event.title}</h1></div>{user && <button type="button" className="secondary-button" onClick={() => onEdit(event)}>Editar evento</button>}</div>
+    <div className="detail-heading"><div><span className="section-kicker">ENCUENTRO · TINKUS SAN SIMÓN</span><h1>{event.title}</h1><span className={`category-label category-${event.category}`}>{eventCategoryLabels[event.category]}{event.repeat_weekly ? ' · Cada semana' : ''}</span></div>{user && <button type="button" className="secondary-button" onClick={() => onEdit(event)}>Editar evento</button>}</div>
     <div className="detail-grid"><article className="detail-main">
       {event.images.length > 0 && <div className="event-gallery" aria-label="Imágenes del evento">{event.images.map((path, index) => <img key={path} src={path} alt={`${event.title} — imagen ${index + 1}`} loading={index ? 'lazy' : 'eager'} />)}</div>}
       <h2>Sobre este encuentro</h2><p className="detail-description">{event.description || 'Pronto compartiremos más información sobre este encuentro.'}</p>
@@ -285,21 +304,23 @@ function App() {
         if (!response.ok || !response.headers.get('content-type')?.startsWith('image/')) { setFormError(`La imagen ${path} no está disponible en el sitio.`); setSaving(false); return }
       } catch { setFormError(`No se pudo comprobar la imagen ${path}.`); setSaving(false); return }
     }
-    const payload = { title: form.title.trim(), description: form.description.trim() || null, location: form.location.trim() || null, starts_at: startsAt, ends_at: endsAt, images }
+    const payload = { title: form.title.trim(), description: form.description.trim() || null, location: form.location.trim() || null, starts_at: startsAt, ends_at: endsAt, images, category: form.category, repeat_weekly: form.repeatWeekly }
+    const eventId = editingEvent?.series_id ?? editingEvent?.id
     const result = editingEvent
-      ? await supabase.from('events').update(payload).eq('id', editingEvent.id).select('id').single()
+      ? await supabase.from('events').update(payload).eq('id', eventId).select('id').single()
       : await supabase.from('events').insert({ ...payload, created_by: user.id }).select('id').single()
     setSaving(false)
     if (result.error || !result.data) { setFormError('No se pudo guardar el evento. Inténtalo de nuevo.'); return }
     setModal(null)
     setRefreshKey((value) => value + 1)
-    navigate(`/eventos/${result.data.id}`)
+    const eventRouteId = form.repeatWeekly ? `${result.data.id}@${form.startsAt.slice(0, 10)}` : result.data.id
+    navigate(`/eventos/${eventRouteId}`)
   }
 
   async function deleteEvent() {
-    if (!supabase || !editingEvent || !window.confirm('¿Eliminar este evento? Esta acción no se puede deshacer.')) return
+    if (!supabase || !editingEvent || !window.confirm(editingEvent.repeat_weekly ? '¿Eliminar toda esta serie semanal? Esta acción no se puede deshacer.' : '¿Eliminar este evento? Esta acción no se puede deshacer.')) return
     setSaving(true)
-    const { error } = await supabase.from('events').delete().eq('id', editingEvent.id)
+    const { error } = await supabase.from('events').delete().eq('id', editingEvent.series_id ?? editingEvent.id)
     setSaving(false)
     if (error) setFormError('No se pudo eliminar el evento.')
     else { setModal(null); setRefreshKey((value) => value + 1); navigate('/calendario') }
@@ -311,7 +332,7 @@ function App() {
     <Routes><Route path="/" element={<HomePage {...calendarProps} />} /><Route path="/calendario" element={<CalendarPage {...calendarProps} />} /><Route path="/admin" element={<AdminDashboard {...calendarProps} />} /><Route path="/eventos/:id" element={<EventDetailPage user={user} refreshKey={refreshKey} onEdit={calendarProps.onEdit} />} /><Route path="/grupo" element={<GroupPage />} /><Route path="*" element={<NotFoundPage />} /></Routes><SiteFooter />
     {modal && <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setModal(null) }}><div className="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"><div className="modal-header"><div><span className="section-kicker">ÁREA ADMIN</span><h2 id="modal-title">{modal === 'login' ? 'Entrar' : editingEvent ? 'Editar evento' : 'Nuevo evento'}</h2></div><button type="button" aria-label="Cerrar" onClick={() => setModal(null)}><X size={22} /></button></div>
       {modal === 'login' ? <form onSubmit={(event) => void signIn(event)} className="form-stack"><label>Correo electrónico<input type="email" required autoComplete="username" value={email} onChange={(event) => setEmail(event.target.value)} /></label><label>Contraseña<input type="password" required autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} /></label>{formError && <p className="form-error" role="alert">{formError}</p>}<button type="submit" className="primary-button" disabled={saving}>{saving ? 'Entrando…' : 'Entrar'}</button></form>
-        : <form onSubmit={(event) => void saveEvent(event)} className="form-stack"><label>Título<input required maxLength={120} value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} /></label><div className="form-pair"><label>Inicio<input type="datetime-local" required value={form.startsAt} onChange={(event) => setForm({ ...form, startsAt: event.target.value })} /></label><label>Fin<input type="datetime-local" required value={form.endsAt} onChange={(event) => setForm({ ...form, endsAt: event.target.value })} /></label></div><p className="timezone-note">Horario de Valencia</p><label>Lugar<input maxLength={200} value={form.location} onChange={(event) => setForm({ ...form, location: event.target.value })} /></label><label>Descripción<textarea rows={4} maxLength={5000} value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} /></label><label>Imágenes del evento <span className="field-hint">Una ruta por línea, después de publicar el archivo en /public/events</span><textarea rows={3} value={form.imagesText} placeholder="/events/ensayo-01.jpg" onChange={(event) => setForm({ ...form, imagesText: event.target.value })} /></label>{formError && <p className="form-error" role="alert">{formError}</p>}<div className="form-actions">{editingEvent && <button type="button" className="danger-link" disabled={saving} onClick={() => void deleteEvent()}>Eliminar</button>}<button type="submit" className="primary-button" disabled={saving}>{saving ? 'Guardando…' : 'Guardar evento'}</button></div></form>}
+        : <form onSubmit={(event) => void saveEvent(event)} className="form-stack"><label>Título<input required maxLength={120} value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} /></label><label>Categoría<select value={form.category} onChange={(event) => setForm({ ...form, category: event.target.value as CalendarEvent['category'] })}>{eventCategories.map((category) => <option key={category} value={category}>{eventCategoryLabels[category]}</option>)}</select></label><div className="form-pair"><label>Inicio<input type="datetime-local" required value={form.startsAt} onChange={(event) => setForm({ ...form, startsAt: event.target.value })} /></label><label>Fin<input type="datetime-local" required value={form.endsAt} onChange={(event) => setForm({ ...form, endsAt: event.target.value })} /></label></div><p className="timezone-note">Horario de Valencia</p><label className="repeat-option"><input type="checkbox" checked={form.repeatWeekly} onChange={(event) => setForm({ ...form, repeatWeekly: event.target.checked })} /><span>Repetir cada semana</span></label>{form.repeatWeekly && <p className="timezone-note">La serie semanal comienza en la fecha de inicio.</p>}<label>Lugar<input maxLength={200} value={form.location} onChange={(event) => setForm({ ...form, location: event.target.value })} /></label><label>Descripción<textarea rows={4} maxLength={5000} value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} /></label><label>Imágenes del evento <span className="field-hint">Una ruta por línea, después de publicar el archivo en /public/events</span><textarea rows={3} value={form.imagesText} placeholder="/events/ensayo-01.jpg" onChange={(event) => setForm({ ...form, imagesText: event.target.value })} /></label>{formError && <p className="form-error" role="alert">{formError}</p>}<div className="form-actions">{editingEvent && <button type="button" className="danger-link" disabled={saving} onClick={() => void deleteEvent()}>{editingEvent.repeat_weekly ? 'Eliminar serie' : 'Eliminar'}</button>}<button type="submit" className="primary-button" disabled={saving}>{saving ? 'Guardando…' : 'Guardar evento'}</button></div></form>}
     </div></div>}
   </div>
 }
