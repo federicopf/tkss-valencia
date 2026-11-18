@@ -132,6 +132,10 @@
 .form-stack input:focus, .form-stack textarea:focus, .form-stack select:focus { border-color: #111; box-shadow: 0 0 0 2px #111; }
 .form-stack label.repeat-option { flex-direction: row; align-items: center; gap: 10px; }
 .repeat-option input { width: 18px; height: 18px; margin: 0; accent-color: #111; }
+.edit-scope { display: flex; flex-wrap: wrap; gap: 12px 22px; border: 1px solid #ddd; padding: 14px; }
+.edit-scope legend { padding: 0 5px; color: #333; font-size: 12px; font-weight: 800; }
+.form-stack .edit-scope label { flex-direction: row; align-items: center; gap: 7px; font-weight: 600; }
+.edit-scope input { width: 16px; height: 16px; margin: 0; accent-color: #111; }
 .form-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .timezone-note { color: #666; font-size: 11px; margin: -8px 0 0; }
 .form-error { color: #111; background: #eee; border-left: 3px solid #111; padding: 10px; font-size: 12px; margin: 0; }
